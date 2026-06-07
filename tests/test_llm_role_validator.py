@@ -406,3 +406,47 @@ def test_tool_role_recognised():
     # Tool role consecutive with user is fine (different roles); structural ok
     kinds = {v.kind for v in result.violations}
     assert ViolationKind.UNKNOWN_ROLE not in kinds
+
+
+# ---------------------------------------------------------------------------
+# validate() — malformed (non-dict) messages must not crash
+# ---------------------------------------------------------------------------
+
+
+def test_non_dict_message_string():
+    result = validate(["not a dict"])
+    assert len(result.by_kind(ViolationKind.INVALID_MESSAGE)) == 1
+    assert result.violations[0].index == 0
+
+
+def test_non_dict_message_none():
+    result = validate([None])
+    assert len(result.by_kind(ViolationKind.INVALID_MESSAGE)) == 1
+
+
+def test_non_dict_message_number():
+    result = validate([123])
+    assert len(result.by_kind(ViolationKind.INVALID_MESSAGE)) == 1
+
+
+def test_non_dict_message_mixed_with_valid():
+    messages = [
+        {"role": "user", "content": "hi"},
+        5,
+        {"role": "user", "content": "bye"},
+    ]
+    result = validate(messages)
+    invalid = result.by_kind(ViolationKind.INVALID_MESSAGE)
+    assert len(invalid) == 1
+    assert invalid[0].index == 1
+
+
+def test_non_dict_message_provider_paths_do_not_crash():
+    # Each provider branch must tolerate non-dict entries without raising.
+    for provider in ("anthropic", "openai", "gemini", "generic"):
+        result = validate([None, {"role": "user", "content": "hi"}], provider=provider)
+        assert len(result.by_kind(ViolationKind.INVALID_MESSAGE)) == 1
+
+
+def test_invalid_message_kind_value():
+    assert ViolationKind.INVALID_MESSAGE.value == "invalid_message"

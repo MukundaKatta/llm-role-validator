@@ -67,6 +67,7 @@ Validate a list of message dicts. Returns a `ValidationResult`.
 | `first_not_user` | First non-system message is not `user` |
 | `missing_role` | Message has no `"role"` key |
 | `missing_content` | Message has no `"content"` key |
+| `invalid_message` | Message is not a dict (e.g. a string, number, or `None`) |
 
 ## Provider rules
 

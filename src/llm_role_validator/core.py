@@ -68,6 +68,8 @@ class ViolationKind(str, Enum):
     MISSING_ROLE = "missing_role"
     # Message is missing the 'content' field
     MISSING_CONTENT = "missing_content"
+    # Message is not a mapping (e.g. a string, number, or None)
+    INVALID_MESSAGE = "invalid_message"
 
 
 @dataclass
@@ -207,8 +209,10 @@ def validate(
 _KNOWN_ROLES = {r.value for r in MessageRole}
 
 
-def _role_of(msg: dict[str, Any]) -> str | None:
-    """Return the role string of *msg*, or ``None`` if absent."""
+def _role_of(msg: Any) -> str | None:
+    """Return the role string of *msg*, or ``None`` if absent or unavailable."""
+    if not isinstance(msg, dict):
+        return None
     return msg.get("role")
 
 
@@ -218,6 +222,17 @@ def _check_fields(
 ) -> None:
     """Check that each message has 'role' and 'content'."""
     for i, msg in enumerate(messages):
+        if not isinstance(msg, dict):
+            out.append(
+                Violation(
+                    kind=ViolationKind.INVALID_MESSAGE,
+                    index=i,
+                    description=(
+                        f"index {i}: message must be a dict, got {type(msg).__name__}"
+                    ),
+                )
+            )
+            continue
         if "role" not in msg:
             out.append(
                 Violation(
@@ -311,11 +326,12 @@ def _non_system_messages(
     messages: list[dict[str, Any]],
 ) -> list[tuple[int, str]]:
     """Return (index, role) pairs for non-system messages with a known role."""
-    return [
-        (i, msg["role"])
-        for i, msg in enumerate(messages)
-        if msg.get("role") and msg["role"] != MessageRole.SYSTEM.value
-    ]
+    pairs: list[tuple[int, str]] = []
+    for i, msg in enumerate(messages):
+        role = _role_of(msg)
+        if role and role != MessageRole.SYSTEM.value:
+            pairs.append((i, role))
+    return pairs
 
 
 def _check_anthropic(
@@ -395,7 +411,7 @@ def _check_gemini(
     - Last message must be 'user'.
     """
     for i, msg in enumerate(messages):
-        if msg.get("role") == MessageRole.SYSTEM.value:
+        if _role_of(msg) == MessageRole.SYSTEM.value:
             out.append(
                 Violation(
                     kind=ViolationKind.SYSTEM_NOT_FIRST,
